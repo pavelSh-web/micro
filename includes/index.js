@@ -1,5 +1,97 @@
 
+// Fixes for LESS build
+const createElement = () => {
+    return {
+        dataset: {},
+        appendChild: () => {},
+        removeChild: () => {},
+    };
+};
 
+self.window = self;
+self.window.document = {
+    head: createElement('head'),
+    body: createElement('body'),
+    createTextNode: createElement,
+    createElement,
+    getElementsByTagName: (tagName) => {
+        if (tagName === 'link') {
+            return [];
+        }
+
+        return [createElement('style')];
+    }
+};
+
+Comlink.expose({
+    async init(themeId, versionId) {
+        importScripts('/_s/lib/less/less-3.12.2.min.js');
+        importScripts(`/_s/build/theme/${ themeId }/less_mixins.js?${ versionId }`);
+    },
+
+    /**
+     * @param source - Source less string
+     * @param data - Data for transform to vars
+     * @return {Promise<string|*>}
+     */
+    async renderStyle(source, data = {}, options = {}) {
+        // Something wrong
+        if (!less || !data) {
+            return '';
+        }
+
+        if (self.globalLessMixin) {
+            source += self.globalLessMixin;
+        }
+
+        try {
+            const out = await less.render(source, {
+                compress: false,
+                modifyVars: _buildVars(data),
+                ...options
+            });
+
+            return out.css;
+        }
+        catch (err) {
+            console.error('LESS error: ', err, ', from: ', data);
+        }
+    }
+});
+
+
+/*
+ * Весь рендер LESS на стороне клиента происходит здесь.
+ * Если в каком то скрипте рендерится самостоятельно - настоятельное требование выполнить рефакторинг и унести функционал сюда
+ * На данный момент скрипт рендерит стили для блоков и модалок, включая при этом переданные данные в виде переменных
+ * Принимает обьект с данными БЛОКА (модала), специально ничего подготавливать не нужно
+ * но можно передать любой обьект
+ * Данные вида:
+ {
+    ab: '#FFF',
+    bc: 'русские буквы',
+    cd: 1,
+    de: [
+        {ab: 1},
+        {ab: 3}
+    ],
+    ef: {
+        ab: "string"
+    }
+ }
+ * превратятся в less переменные:
+ @ab: #FFF // без кавычек
+ @cd: 1
+ @de--ab: "1, 3" // вот такие строки LESS может распарсить как массивы
+ @ef-ab: "string"
+ * вложенность таких массивов как de, ef ограничена где то 4 уровнями вложенности
+ */
+
+/*
+* BUILD VARS
+* Специальные переменные из this.data которые необхоидмо вставить как перменные LESS
+* собирает обьект без вложенности с данными из блока, которые соответствуют заданным условиям (это путь, число или цвет)
+*/
 function _buildVars(data, prefix = '', deph = -1) {
     if (typeof data != 'object') {
         return;
@@ -76,4 +168,30 @@ function _buildVars(data, prefix = '', deph = -1) {
     }
 
     return lessVars;
+}
+
+// обьединяет 2 обьекта
+function _extend(arr1, arr2) {
+    if (typeof arr2 != 'object') {
+        return arr1;
+    }
+
+    const arr = Object.assign({}, arr1);
+
+    for (const key in arr2) {
+        if (!arr2.hasOwnProperty(key)) {
+            continue;
+        }
+
+        const value = arr2[key];
+
+        if (typeof arr[key] != 'undefined' && typeof arr[key] != 'object' && typeof value != 'object') {
+            arr[key] += (`, ${ value }`);
+        }
+        else {
+            arr[key] = value;
+        }
+    }
+
+    return arr;
 }

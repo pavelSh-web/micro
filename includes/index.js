@@ -1,3 +1,7 @@
+/* eslint-disable default-case */
+/* eslint-disable wrap-iife */
+/* eslint-disable func-names */
+/* eslint-disable guard-for-in */
 const less = require('less');
 
 async function renderStyle({ source, data, options } = {}) {
@@ -6,9 +10,10 @@ async function renderStyle({ source, data, options } = {}) {
         return '';
     }
 
+    source = _serializeVars(_buildVars(data))+' '+source;
+
     const out = await less.render(source, {
         compress: false,
-        modifyVars: { ..._buildVars(data), ..._buildVarsOld(data) },
         ...options
     });
 
@@ -115,11 +120,112 @@ function _buildVarsOld(data, prefix = '', deph = -1) {
         if (deph < 7 && value && typeof value == 'object') {
             // это обьект или массив обьектов, углубляемся
             if (!Array.isArray(value) || (value.length && typeof value[0] == 'object')) {
-                lessVars = _extend(lessVars, _buildVars(value, fullPath, deph));
+                lessVars = _extend(lessVars, _buildVarsOld(value, fullPath, deph));
             }
             // это массив
             else {
                 lessVars[fullPath] = `'${ value.join(',') }'`;
+            }
+        }
+    }
+
+    return lessVars;
+}
+
+function _serializeVars(data) {
+    function stringify(obj) {
+        if (typeof obj !== 'object' || obj === null || obj instanceof Array) {
+            return value(obj);
+        }
+
+        return `{${ Object.keys(obj).map(k => ((typeof obj[k] === 'function') ? null : `${ k }:${ value(obj[k]) };`).slice(0, -1)).filter(i => i) }}`;
+    }
+
+    function value(val) {
+        switch (typeof val) {
+            case 'string':
+                return `"${ val.replace(/\\/g, '\\\\').replace('"', '\\"') }"`;
+            case 'number': 
+            case 'boolean':
+                return `${ val }`;
+            case 'function':
+                return 'null';
+            case 'object':
+                if (val instanceof Date)  
+                    return `"${ val.toISOString() }"`;
+                if (val instanceof Array) 
+                    return `[${ val.map(value).join(',') }]`;
+                if (val === null)         
+                    return 'null';
+                return stringify(val);
+        }
+    }
+    
+    return stringify(data).slice(0, -1).slice(1);
+}
+
+function _buildVars(data, prefix = '@') {
+    if (typeof data != 'object') {
+        return;
+    }
+
+    const lessVars = {};
+
+    for (const name in data) {
+        let value =  data[name];
+        const path = prefix + name;
+
+        // эта строка валидна (без кириллицы, тегов, возможно это цвет или путь, какая то цифра или процент), добавляем сразу
+        if (
+            typeof value != 'undefined'
+            && typeof value != 'object'
+            && (typeof value == 'number' || value.length)
+        ) {
+            const isNumber = /^[\d ]*$/.test(value);
+            const isColor = /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\));?\s*$/i.test(value);
+            const isGradient = /^\s*(?:linear-gradient|repeat-linear-gradient)\(.*\)/i.test(value);
+            const isColorAndTexture = /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\))\s*url\((.*)\)$/i.test(value);
+            const isCssUrl = /url\([a-z0-9_\/\\\'\"?.,%;:&\(\)]*\)/i.test(value);
+
+            // это цвет
+            if (isNumber || isColor || isGradient || isColorAndTexture || isCssUrl) {
+                lessVars[path] = value;
+            }
+            else {
+                // В остальных случаях вырезаем кавычки из переменной (меняем одинарный на двойные)
+                if (typeof (value) === 'string') {
+                    value = value.split('\'')
+                        .join('"');
+                }
+                lessVars[path] = `'${ value }'`;
+            }
+        }
+
+        if (value && typeof value == 'object') {
+            // это массив 
+            if (Array.isArray(value)) {
+                const newValue = {};                
+                
+                value.forEach((item, i) => {
+                    if (value.length && typeof value[0] == 'object') {
+                        for (const key in item) {
+                            if (!newValue[prefix + key]) {
+                                newValue[prefix + key] = [];
+                            }
+                            
+                            newValue[prefix + key][i] = item[key];
+                        }
+                    } 
+                    else {
+                        newValue[i] = item;
+                    }
+                });
+
+                lessVars[path] = _buildVars(newValue, '');
+            }
+            // это обьект
+            else {
+                lessVars[path] = _buildVars(value);
             }
         }
     }

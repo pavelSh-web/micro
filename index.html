@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+        let obj = {
+            "id": "559451",
+            "form": {
+                "submit": {
+                    "color": "#444",
+                    "text": "Бесплатный замер"
+                },
+                "list": [
+                    {
+                        "id": 10001,
+                        "color": "#111",
+                        "type": "name",
+                        "name": "Имя",
+                        "desc": "Например: Владимир",
+                        "is_required": 0
+                    },
+                    {
+                        "id": 20002,
+                        "color": "#222",
+                        "font_size": "15px",
+                        "type": "email",
+                        "name": "E-mail",
+                        "desc": "",
+                        "is_required": 1
+                    }
+                ],
+                "btn_style": [
+                    "filled",
+                    "rounded"
+                ]
+            },
+            "swap": 0,
+            "show_form": 1,
+            "show_form_title_2": 0,
+            "show_form_bottom": 1,
+            "show_desc": 0,
+            "content_align": "center",
+            "title_1_tag": "div",
+            "title_2_tag": "div",
+            "cover": 1,
+            "indent": {
+                "top": 110,
+                "bottom": 110,
+                "min_padding": 110
+            },
+            "background": {
+                "parallax": "parallax",
+                "color": "#000",
+                "contrast": "light",
+                "text": "contrast",
+                "gradient": 0,
+                "image": "/img/1000013790_1920.jpg",
+                "opacity": 50,
+                "type": "video",
+                "baseBgMobile": false,
+                "position": {
+                    "x": "55.20%",
+                    "y": "50.35%"
+                },
+                "video_color": "#000",
+                "video_preview_type": "image",
+                "video": {
+                    "url": "/files/video_59.mp4",
+                    "link": "/files/video_59.mp4",
+                    "id": null,
+                    "type": "custom"
+                },
+                "video_image": "/img/2000014550_1200.jpg",
+                "video_image_id": 2000014550,
+                "video_image_ext": "jpg",
+                "video_image_width": 1200,
+                "video_image_proportion": 60,
+                "video_image_average": "#87AA86"
+            },
+            "hide_title": 0,
+            "hide_subtitle": 0,
+            "_anchor": ""
+        };
+
+        const output = (function _buildVars(data, path = 'path', prefix = '@') {
+            if (typeof data != 'object') {
+                return;
+            }
+
+            let lessVars = {};
+
+            for (const name in data) {
+                let value =  data[name];
+                let path = prefix+name;
+
+                // эта строка валидна (без кириллицы, тегов, возможно это цвет или путь, какая то цифра или процент), добавляем сразу
+                if (
+                    typeof value != 'undefined'
+                    && typeof value != 'object'
+                    && (typeof value == 'number' || value.length)
+                ) {
+                    const isNumber = /^[\d ]*$/.test(value);
+                    const isColor = /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\));?\s*$/i.test(value);
+                    const isGradient = /^\s*(?:linear-gradient|repeat-linear-gradient)\(.*\)/i.test(value);
+                    const isColorAndTexture = /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\))\s*url\((.*)\)$/i.test(value);
+                    const isCssUrl = /url\([a-z0-9_\/\\\'\"?.,%;:&\(\)]*\)/i.test(value);
+
+                    // это цвет
+                    if (isNumber || isColor || isGradient || isColorAndTexture || isCssUrl) {
+                        lessVars[path] = value;
+                    }
+                    else {
+                        // В остальных случаях вырезаем кавычки из переменной (меняем одинарный на двойные)
+                        if (typeof (value) === 'string') {
+                            value = value.split('\'')
+                                .join('"');
+                        }
+                        lessVars[path] = `'${ value }'`;
+                    }
+                }
+
+                if (value && typeof value == 'object') {
+                    // это массив 
+                    if (Array.isArray(value)) {
+                        let newValue = {};                
+                        
+                        value.forEach((item, i) => {
+                            if (value.length && typeof value[0] == 'object') {
+                                for (const key in item) {
+                                    if (!newValue[prefix+key]) {
+                                        newValue[prefix+key] = [];
+                                    }
+                                    
+                                    newValue[prefix+key][i] = item[key];
+                                }
+                            } 
+                            else {
+                                newValue[i] = item;
+                            }
+                        });
+
+                        lessVars[path] = _buildVars(newValue, path, '');
+                    }
+                    // это обьект
+                    else {
+                        lessVars[path] = _buildVars(value, path);
+                    }
+                }
+            }
+
+            return lessVars;
+        })(obj);
+
+        
+        function _serializeVars(data) {
+            function stringify(obj) {
+                if (typeof obj !== 'object' || obj === null || obj instanceof Array) {
+                    return value(obj);
+                }
+
+                return `{${ Object.keys(obj).map(k => ((typeof obj[k] === 'function') ? null : `${ k }:${ value(obj[k]) };`).slice(0, -1)).filter(i => i) }}`;
+            }
+
+            function value(val) {
+                switch (typeof val) {
+                    case 'string':
+                        return `"${ val.replace(/\\/g, '\\\\').replace('"', '\\"') }"`;
+                    case 'number': 
+                    case 'boolean':
+                        return `${ val }`;
+                    case 'function':
+                        return 'null';
+                    case 'object':
+                        if (val instanceof Date)  
+                            return `"${ val.toISOString() }"`;
+                        if (val instanceof Array) 
+                            return `[${ val.map(value).join(',') }]`;
+                        if (val === null)         
+                            return 'null';
+                        return stringify(val);
+                }
+            }
+            
+            return stringify(data).slice(0, -1).slice(1);
+        }   
+        console.log(_serializeVars(output));
+
+    </script>
+</body>
+</html>

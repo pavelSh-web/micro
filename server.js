@@ -46,14 +46,4 @@ http.createServer((req, res) => {
         res.setHeader('Content-Type', 'plain/text');
         res.end(content);
     }
-
-    // const params = {};
-    // console.log(req);
-    // const render = new RenderLess(params);
-    
-    // render.renderStyle()   
-    //     .then((css) => {
-    //         res.end(css);
-    //     })
-    //     .catch();
 }).listen('8080', '0.0.0.0');

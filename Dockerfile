@@ -1,10 +1,12 @@
-FROM ubuntu:18.04
+FROM registry.flexbe.net/flexbe/images/nodejs
+MAINTAINER Vitaliy Shindin <vit@flexbe.com>
+LABEL Vendor="Flexbe"
 
-ENV NODE_VERSION 4.4.7
+WORKDIR /flexbe/micro
 
 COPY ./ /micro
 
-EXPOSE 1212
+EXPOSE 8080
 
 CMD ["node","server.js"]
 

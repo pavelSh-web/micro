@@ -1,4 +1,4 @@
-'use strict';
+
 
 const http = require('http');
 const renderStyle = require('./includes/index');

@@ -10,7 +10,7 @@ async function renderStyle({ source, data, options } = {}) {
         return '';
     }
 
-    source = _serializeVars(_buildVars(data))+' '+source;
+    source = `${ _serializeVars(_buildVars(data)) } ${ source }`;
 
     const out = await less.render(source, {
         compress: false,
@@ -138,23 +138,39 @@ function _serializeVars(data) {
             return value(obj);
         }
 
-        return `{${ Object.keys(obj).map(k => ((typeof obj[k] === 'function') ? null : `${ k }:${ value(obj[k]) };`).slice(0, -1)).filter(i => i) }}`;
+        let newObject = `{${ Object.keys(obj).map(k => (typeof obj[k] === 'function' ? null : `${ k }:${ value(obj[k]) }`)).filter(i => i) }}`.split('');
+
+        newObject = newObject.map((elem, i) => {
+            if (elem === ',') {
+                if (newObject[i - 1] === ';') {
+                    elem = '';
+                }
+                else if (newObject[i - 1] === '}') {
+                    elem = ';';
+                }
+            }
+
+            return elem;
+        });
+
+        return newObject.join('');
     }
 
     function value(val) {
         switch (typeof val) {
             case 'string':
-                return `"${ val.replace(/\\/g, '\\\\').replace('"', '\\"') }"`;
+                return `"${ val.replace(/\\/g, '\\\\').replace('"', '\\"') }";`;
             case 'number': 
+                return `${ val };`;
             case 'boolean':
-                return `${ val }`;
+                return `${ val };`;
             case 'function':
                 return 'null';
             case 'object':
                 if (val instanceof Date)  
-                    return `"${ val.toISOString() }"`;
+                    return `"${ val.toISOString() }";`;
                 if (val instanceof Array) 
-                    return `[${ val.map(value).join(',') }]`;
+                    return `[${ val.map(value).join(',') }];`;
                 if (val === null)         
                     return 'null';
                 return stringify(val);

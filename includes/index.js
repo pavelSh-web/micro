@@ -20,40 +20,14 @@ async function renderStyle({ source, data, options } = {}) {
     return out.css;
 }
 
-
 /*
-* Весь рендер LESS на стороне клиента происходит здесь.
-* Если в каком то скрипте рендерится самостоятельно - настоятельное требование выполнить рефакторинг и унести функционал сюда
-* На данный момент скрипт рендерит стили для блоков и модалок, включая при этом переданные данные в виде переменных
-* Принимает обьект с данными БЛОКА (модала), специально ничего подготавливать не нужно
-* но можно передать любой обьект
-* Данные вида:
-{
-    ab: '#FFF',
-    bc: 'русские буквы',
-    cd: 1,
-    de: [
-        {ab: 1},
-        {ab: 3}
-    ],
-    ef: {
-        ab: "string"
-    }
-}
-* превратятся в less переменные:
-@ab: #FFF // без кавычек
-@cd: 1
-@de--ab: "1, 3" // вот такие строки LESS может распарсить как массивы
-@ef-ab: "string"
-* вложенность таких массивов как de, ef ограничена где то 4 уровнями вложенности
+* SERIALIZE VARS
+* Аналон JSON.stringify()
+* Преобразует обьект, созданный в _buildVars, в читабельный для LESS вид:
+* 1) меняет ',' на ';' 
+* 2) убирает фигурные скобки в начале и в конце обьекта
+* 3) на выходе отдает обьект в виде строки
 */
-
-/*
-* BUILD VARS
-* Специальные переменные из this.data которые необхоидмо вставить как перменные LESS
-* собирает обьект без вложенности с данными из блока, которые соответствуют заданным условиям (это путь, число или цвет)
-*/
-
 function _serializeVars(data) {
     function stringify(obj) {
         if (typeof obj !== 'object' || obj === null || obj instanceof Array) {
@@ -79,7 +53,6 @@ function _serializeVars(data) {
     }
 
     function value(val) {
-        console.log(val);
         switch (typeof val) {
             case 'string':
                 return `"${ val.replace(/\\/g, '\\\\').replace('"', '\\"') }";`;
@@ -103,6 +76,38 @@ function _serializeVars(data) {
     return stringify(data).slice(0, -1).slice(1);
 }
 
+/*
+* BUILD VARS
+* Собирает обьект обьект с переменными
+* Массивы разворачиваются наружу, вкладывать массивы друг в друга нельзя
+* Данные вида:
+{
+    background: '#FFF',
+    text: {
+        button: "Купить",
+        tip: "Доставка бесплатно"
+    },
+    z-index: 1,
+    list: [
+        {id: 1, color: #254950},
+        {id: 3, color: #000, font-size: 14px}
+    ]
+}
+* превратятся в обьект  с переменными:
+{
+    '@background': '#FFF',
+    '@text': {
+        '@button': "'Купить'",
+        '@tip': "'Доставка бесплатно'"
+    },
+    '@z-index': '1',
+    '@list': {
+        '@id': {'0': '1', '1': '3'},
+        '@color': {'0': '#254950', '1': '#000' }
+        '@font-size': {'1': '14px' }
+    }
+}
+*/
 function _buildVars(data, prefix = '@') {
     if (typeof data != 'object') {
         return;
@@ -172,31 +177,7 @@ function _buildVars(data, prefix = '@') {
     return lessVars;
 }
 
-// обьединяет 2 обьекта
-function _extend(arr1, arr2) {
-    if (typeof arr2 != 'object') {
-        return arr1;
-    }
 
-    const arr = Object.assign({}, arr1);
-
-    for (const key in arr2) {
-        if (!arr2.hasOwnProperty(key)) {
-            continue;
-        }
-
-        const value = arr2[key];
-
-        if (typeof arr[key] != 'undefined' && typeof arr[key] != 'object' && typeof value != 'object') {
-            arr[key] += (`, ${ value }`);
-        }
-        else {
-            arr[key] = value;
-        }
-    }
-
-    return arr;
-}
 
 // Старая функция сборки переменных
 function _buildVarsOld(data, prefix = '', deph = -1) {
@@ -276,6 +257,33 @@ function _buildVarsOld(data, prefix = '', deph = -1) {
 
     return lessVars;
 }
+
+// обьединяет 2 обьекта
+function _extend(arr1, arr2) {
+    if (typeof arr2 != 'object') {
+        return arr1;
+    }
+
+    const arr = Object.assign({}, arr1);
+
+    for (const key in arr2) {
+        if (!arr2.hasOwnProperty(key)) {
+            continue;
+        }
+
+        const value = arr2[key];
+
+        if (typeof arr[key] != 'undefined' && typeof arr[key] != 'object' && typeof value != 'object') {
+            arr[key] += (`, ${ value }`);
+        }
+        else {
+            arr[key] = value;
+        }
+    }
+
+    return arr;
+}
+
 
 
 module.exports = renderStyle;

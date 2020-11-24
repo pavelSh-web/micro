@@ -30,7 +30,7 @@ async function renderStyle({ source, data, options } = {}) {
 */
 function _serializeVars(data) {
     function stringify(obj) {
-        if (typeof obj !== 'object' || obj === null || obj instanceof Array) {
+        if (obj == null || typeof obj !== 'object' || obj instanceof Array) {
             return value(obj);
         }
 
@@ -138,8 +138,7 @@ function _buildVars(data, prefix = '@') {
             else {
                 // В остальных случаях вырезаем кавычки из переменной (меняем одинарный на двойные)
                 if (typeof (value) === 'string') {
-                    value = value.split('\'')
-                        .join('"');
+                    value = value.replace(/[\']/g, '"');
                 }
                 lessVars[path] = `'${ value }'`;
             }

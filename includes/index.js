@@ -10,7 +10,7 @@ async function renderStyle({ source, data, options } = {}) {
         return '';
     }
 
-    source = `${ _serializeVars(_buildVars(data)) } ${ source }`;
+    source += _serializeVars(_buildVars(data));
 
     const out = await less.render(source, {
         compress: false,
@@ -30,7 +30,7 @@ async function renderStyle({ source, data, options } = {}) {
 */
 function _serializeVars(data) {
     function stringify(obj) {
-        if (obj == null || typeof obj !== 'object' || obj instanceof Array) {
+        if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) {
             return value(obj);
         }
 
@@ -120,29 +120,7 @@ function _buildVars(data, prefix = '@') {
         const path = prefix + name;
 
         // эта строка валидна (без кириллицы, тегов, возможно это цвет или путь, какая то цифра или процент), добавляем сразу
-        if (
-            typeof value != 'undefined'
-            && typeof value != 'object'
-            && (typeof value == 'number' || value.length)
-        ) {
-            const isNumber = /^[\d ]*$/.test(value);
-            const isColor = /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\));?\s*$/i.test(value);
-            const isGradient = /^\s*(?:linear-gradient|repeat-linear-gradient)\(.*\)/i.test(value);
-            const isColorAndTexture = /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\))\s*url\((.*)\)$/i.test(value);
-            const isCssUrl = /url\([a-z0-9_\/\\\'\"?.,%;:&\(\)]*\)/i.test(value);
-
-            // это цвет
-            if (isNumber || isColor || isGradient || isColorAndTexture || isCssUrl) {
-                lessVars[path] = value;
-            }
-            else {
-                // В остальных случаях вырезаем кавычки из переменной (меняем одинарный на двойные)
-                if (typeof (value) === 'string') {
-                    value = value.replace(/[\']/g, '"');
-                }
-                lessVars[path] = `'${ value }'`;
-            }
-        }
+        lessVars[path] = value;
 
         if (value && typeof value == 'object') {
             // это массив 

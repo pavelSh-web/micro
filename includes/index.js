@@ -29,7 +29,6 @@ async function renderStyle({ source, data, options } = {}) {
 * 3) на выходе отдает обьект в виде строки
 */
 function _serializeVars(data) {
-    console.log(data);
     function stringify(obj) {
         if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) {
             return value(obj);

@@ -9,7 +9,7 @@ async function renderStyle({ source, data, options } = {}) {
     if (!source) {
         return '';
     }
-
+    
     source += _serializeVars(_buildVars(data));
 
     const out = await less.render(source, {
@@ -29,12 +29,13 @@ async function renderStyle({ source, data, options } = {}) {
 * 3) на выходе отдает обьект в виде строки
 */
 function _serializeVars(data) {
+    console.log(data);
     function stringify(obj) {
         if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) {
             return value(obj);
         }
 
-        let newObject = `{${ Object.keys(obj).map(k => (typeof obj[k] === 'function' ? null : `${ k }:${ value(obj[k]) }`)).filter(i => i) }}`.split('');
+        let newObject = `{${ Object.keys(obj).map(k => (typeof obj[k] === 'function' ? null : `${ k == +k ? k : `@${ k }` }:${ value(obj[k]) }`)).filter(i => i) }}`.split('');
 
         newObject = newObject.map((elem, i) => {
             if (elem === ',') {
@@ -55,7 +56,7 @@ function _serializeVars(data) {
     function value(val) {
         switch (typeof val) {
             case 'string':
-                return `"${ val.replace(/\\/g, '\\\\').replace('"', '\\"') }";`;
+                return `"${ val.replace(/\\/g, '\\\\').replace(/\"/g, '\\"') }";`;
             case 'number': 
                 return `${ val };`;
             case 'boolean':
@@ -108,7 +109,7 @@ function _serializeVars(data) {
     }
 }
 */
-function _buildVars(data, prefix = '@') {
+function _buildVars(data) {
     if (typeof data != 'object') {
         return;
     }
@@ -116,38 +117,49 @@ function _buildVars(data, prefix = '@') {
     const lessVars = {};
 
     for (const name in data) {
-        let value =  data[name];
-        const path = prefix + name;
+        if (!data.hasOwnProperty(name) || /^_/.test(name)) {
+            continue;
+        }
+        
+        const value =  data[name];
+        lessVars[name] = value;
 
-        // эта строка валидна (без кириллицы, тегов, возможно это цвет или путь, какая то цифра или процент), добавляем сразу
-        lessVars[path] = value;
 
-        if (value && typeof value == 'object') {
-            // это массив 
-            if (Array.isArray(value)) {
-                const newValue = {};                
-                
-                value.forEach((item, i) => {
-                    if (value.length && typeof value[0] == 'object') {
-                        for (const key in item) {
-                            if (!newValue[prefix + key]) {
-                                newValue[prefix + key] = [];
-                            }
-                            
-                            newValue[prefix + key][i] = item[key];
+        // это массив 
+        if (Array.isArray(value)) {
+            const newValue = {};
+        
+            value.forEach((item, i) => {
+                // если в массив вложен массив, то ой все
+                if (Array.isArray(item)) {
+                    return;
+                }
+                // если в массиве вложены обьекты, разворачиваем массив, но только на первом уровне,
+                // игнорируя вложенные обьекты
+                else if (typeof item == 'object') {
+                    Object.entries(item).forEach(([key, value]) => {
+                        if (typeof value === 'object') {
+                            return;
                         }
-                    } 
-                    else {
-                        newValue[i] = item;
-                    }
-                });
+                        
+                        if (!newValue[key]) {
+                            newValue[key] = {};
+                        }
 
-                lessVars[path] = _buildVars(newValue, '');
-            }
-            // это обьект
-            else {
-                lessVars[path] = _buildVars(value);
-            }
+                        newValue[key][i] = value;
+                    });
+                } 
+                // если в массив сложены другие примитивы, то делаем обычный обьект
+                else {
+                    newValue[i] = item;
+                }
+            });
+
+            lessVars[name] = _buildVars(newValue);
+        }
+        // это обьект
+        else if (value && typeof value == 'object') {
+            lessVars[name] = _buildVars(value);
         }
     }
 

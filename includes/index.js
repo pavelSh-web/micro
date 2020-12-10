@@ -56,7 +56,20 @@ function _serializeVars(data) {
     function value(val) {
         switch (typeof val) {
             case 'string':
-                return `"${ val.replace(/\\/g, '\\\\').replace(/\"/g, '\\"') }";`;
+                // Если строка законна
+                if (
+                    /^\s*[\w- ,:]+\s*$/.test(val) || // isSimpleString
+                    /^\s*(#([\da-f]{3}|[\da-f]{6}|[\da-f]{8})|((rgb|hsl)a?\([^)]+\)))\s*$/i.test(val) || // isColor
+                    /^\s*(?:linear-gradient|repeat-linear-gradient|radial-gradient)\(.*\)\s*$/i.test(val) || // isGradient
+                    /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\))\s*url\((.*)\)\s*$/i.test(val) || // isColorAndTexture
+                    /^\s*url\([a-z0-9_\/\\\'\"?.,%;:&\(\)]*\)\s*$/i.test(val) // isCssUrl
+                ) {
+                    return `${ val.trim() };`;
+                }
+                // В остальных случаях вырезаем кавычки из переменной (меняем одинарный на двойные
+                else {
+                    return `'${ val.split('\'').join('"') }';`;
+                }
             case 'number': 
                 return `${ val };`;
             case 'boolean':
@@ -64,10 +77,6 @@ function _serializeVars(data) {
             case 'function':
                 return 'null';
             case 'object':
-                if (val instanceof Date)  
-                    return `"${ val.toISOString() }";`;
-                if (val instanceof Array) 
-                    return `[${ val.map(value).join(',') }];`;
                 if (val === null)         
                     return 'null';
                 return stringify(val);
@@ -179,11 +188,6 @@ function _buildVarsOld(data, prefix = '', deph = -1) {
         prefix += '-';
     }
 
-    // если есть id - добавляем переменную с ним
-    if (data.id && /^[\d ]*$/.test(data.id)) {
-        lessVars.id = data.id;
-    }
-
     deph += 1;
 
     /* eslint no-loops/no-loops: 0 */
@@ -213,7 +217,7 @@ function _buildVarsOld(data, prefix = '', deph = -1) {
             const isColor = /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\));?\s*$/i.test(value);
             const isGradient = /^\s*(?:linear-gradient|repeat-linear-gradient)\(.*\)/i.test(value);
             const isColorAndTexture = /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\))\s*url\((.*)\)$/i.test(value);
-            const isCssUrl = /url\([a-z0-9_\/\\\'\"?.,%;:&\(\)]*\)/i.test(value);
+            const isCssUrl = /^\s*url\([a-z0-9_\/\\\'\"?.,%;:&\(\)]*\)\s*$/i.test(value);
 
             // это цвет
             if (isNumber || isColor || isGradient || isColorAndTexture || isCssUrl) {

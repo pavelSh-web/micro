@@ -14,6 +14,7 @@ async function renderStyle({ source, data, options } = {}) {
 
     const out = await less.render(source, {
         compress: false,
+        modifyVars: _buildVarsOld(data),
         ...options
     });
 
@@ -165,8 +166,6 @@ function _buildVars(data) {
     return lessVars;
 }
 
-
-
 // Старая функция сборки переменных
 function _buildVarsOld(data, prefix = '', deph = -1) {
     if (typeof data != 'object') {
@@ -271,7 +270,6 @@ function _extend(arr1, arr2) {
 
     return arr;
 }
-
 
 
 module.exports = renderStyle;

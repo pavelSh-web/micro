@@ -3,13 +3,14 @@
 /* eslint-disable func-names */
 /* eslint-disable guard-for-in */
 const less = require('less');
+const cssnano = require('cssnano');
 
 async function renderStyle({ source, data, options } = {}) {
     // Something wrong
     if (!source) {
         return '';
     }
-    
+
     source += _serializeVars(_buildVars(data));
 
     const out = await less.render(source, {
@@ -18,73 +19,84 @@ async function renderStyle({ source, data, options } = {}) {
         ...options
     });
 
-    return out.css;
+    const outCompressed = await cssnano.process(out.css);
+
+    return outCompressed.css;
 }
+
 
 /*
 * SERIALIZE VARS
 * Аналон JSON.stringify()
 * Преобразует обьект, созданный в _buildVars, в читабельный для LESS вид:
-* 1) меняет ',' на ';' 
+* 1) меняет ',' на ';'
 * 2) убирает фигурные скобки в начале и в конце обьекта
 * 3) на выходе отдает обьект в виде строки
 */
 function _serializeVars(data) {
-    function stringify(obj) {
-        if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) {
+    function getLeading(pad = 0) {
+       return ' '.repeat(pad);
+    }
+
+    function stringify(obj, pad = 0) {
+        if (obj == null) {
+            return 'null';
+        }
+
+        if (typeof obj !== 'object' || Array.isArray(obj)) {
             return value(obj);
         }
 
-        let newObject = `{${ Object.keys(obj).map(k => (typeof obj[k] === 'function' ? null : `${ k == +k ? k : `@${ k }` }:${ value(obj[k]) }`)).filter(i => i) }}`.split('');
+        const leading = getLeading(pad);
 
-        newObject = newObject.map((elem, i) => {
-            if (elem === ',') {
-                if (newObject[i - 1] === ';') {
-                    elem = '';
+        const str = Object.entries(obj)
+            .filter(([k, v]) => k !== '' && k != null && (typeof v !== 'function'))
+            .map(([k, v]) => {
+                // Deeper
+                if (typeof v === 'object' && v != null) {
+                    return `.${ k } {\n${ stringify(v, pad + 2) }\n${ leading }}`;
                 }
-                else if (newObject[i - 1] === '}') {
-                    elem = ';';
+                // Index
+                else if (k == +k) {
+                    return `${ k }: ${ value(v) };`;
                 }
-            }
 
-            return elem;
-        });
+                // Var
+                return `@${ k }:${ value(v) };`;
+            })
+            .join(`\n${ leading }`);
 
-        return newObject.join('');
+        return `${ leading }${ str }`;
     }
 
     function value(val) {
         switch (typeof val) {
-            case 'string':
-                // Если строка законна
-                if (
-                    /^\s*[\w- ,:]+\s*$/.test(val) || // isSimpleString
-                    /^\s*(#([\da-f]{3}|[\da-f]{6}|[\da-f]{8})|((rgb|hsl)a?\([^)]+\)))\s*$/i.test(val) || // isColor
-                    /^\s*(?:linear-gradient|repeat-linear-gradient|radial-gradient)\(.*\)\s*$/i.test(val) || // isGradient
-                    /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\))\s*url\((.*)\)\s*$/i.test(val) || // isColorAndTexture
-                    /^\s*url\([a-z0-9_\/\\\'\"?.,%;:&\(\)]*\)\s*$/i.test(val) // isCssUrl
-                ) {
-                    return `${ val.trim() };`;
-                }
-                // В остальных случаях вырезаем кавычки из переменной (меняем одинарный на двойные
-                else {
-                    return `'${ val.split('\'').join('"') }';`;
-                }
-            case 'number': 
-                return `${ val };`;
-            case 'boolean':
-                return `${ val };`;
-            case 'function':
-                return 'null';
-            case 'object':
-                if (val === null)         
-                    return 'null';
-                return stringify(val);
+        case 'string':
+            // Если строка законна
+            if (
+                /^\s*[\w-,:%]+\s*$/.test(val) || // isSimpleString
+                /^\s*-?\d+\.?\d*(?:px|%)?\s*$/.test(val) || // isNumericValue (-11.5%, 1345px, 999.5333px, ...)
+                /^\s*(#([\da-f]{3}|[\da-f]{6}|[\da-f]{8})|((rgb|hsl)a?\([^)]+\)))\s*$/i.test(val) || // isColor
+                /^\s*(?:linear-gradient|repeat-linear-gradient|radial-gradient)\(.*\)\s*$/i.test(val) || // isGradient
+                /^\s*(#([\da-f]{3}){1,2}|\w+\((?:\d+%?(?:\s*,\s*)*){3}(?:\d*\.?\d+)?\))\s*url\((.*)\)\s*$/i.test(val) || // isColorAndTexture
+                /^\s*url\([a-z0-9_\/\\\'\"?.,%;:&\(\)]*\)\s*$/i.test(val) // isCssUrl
+            ) {
+                return val.trim();
+            }
+
+            // В остальных случаях вырезаем кавычки из переменной (меняем одинарный на двойные
+            return `'${ val.split('\'').join('"') }'`;
+        case 'number':
+        case 'boolean':
+            return val;
         }
+
+        return 'null';
     }
-    
-    return stringify(data).slice(0, -1).slice(1);
+
+    return `#data() {\n${ stringify(data, 2) }\n}`;
 }
+
 
 /*
 * BUILD VARS
@@ -105,16 +117,16 @@ function _serializeVars(data) {
 }
 * превратятся в обьект  с переменными:
 {
-    '@background': '#FFF',
-    '@text': {
-        '@button': "'Купить'",
-        '@tip': "'Доставка бесплатно'"
+    'background': '#FFF',
+    'text': {
+        'button': "'Купить'",
+        'tip': "'Доставка бесплатно'"
     },
-    '@z-index': '1',
-    '@list': {
-        '@id': {'0': '1', '1': '3'},
-        '@color': {'0': '#254950', '1': '#000' }
-        '@font-size': {'1': '14px' }
+    'z-index': '1',
+    'list': {
+        'id': {'0': '1', '1': '3'},
+        'color': {'0': '#254950', '1': '#000' }
+        'font-size': {'1': '14px' }
     }
 }
 */
@@ -126,18 +138,19 @@ function _buildVars(data) {
     const lessVars = {};
 
     for (const name in data) {
-        if (!data.hasOwnProperty(name) || /^_/.test(name)) {
+        const value = data[name];
+
+        // Кириллица, теги, строки в строках и прочие табуляции не нужны в стилях, это скорее всего пользовательский текст
+        const isDeny = !data.hasOwnProperty(name) || /^_/.test(name) || (typeof value === 'string' && /[а-яё<>\n\t\`'"]|\\/gi.test(value));
+
+        if (isDeny) {
             continue;
         }
-        
-        const value =  data[name];
-        lessVars[name] = value;
 
-
-        // это массив 
+        // это массив
         if (Array.isArray(value)) {
             const newValue = {};
-        
+
             value.forEach((item, i) => {
                 // если в массив вложен массив, то ой все
                 if (Array.isArray(item)) {
@@ -150,14 +163,14 @@ function _buildVars(data) {
                         if (typeof value === 'object') {
                             return;
                         }
-                        
+
                         if (!newValue[key]) {
                             newValue[key] = {};
                         }
 
                         newValue[key][i] = value;
                     });
-                } 
+                }
                 // если в массив сложены другие примитивы, то делаем обычный обьект
                 else {
                     newValue[i] = item;
@@ -170,10 +183,14 @@ function _buildVars(data) {
         else if (value && typeof value == 'object') {
             lessVars[name] = _buildVars(value);
         }
+        else {
+            lessVars[name] = value;
+        }
     }
 
     return lessVars;
 }
+
 
 // Старая функция сборки переменных
 function _buildVarsOld(data, prefix = '', deph = -1) {

@@ -1,7 +1,23 @@
-
-
 const http = require('http');
+const os   = require('os');
+const cluster = require('cluster');
+
 const renderStyle = require('./includes/index');
+
+const cpu = Math.max(1, parseInt(os.cpus().length, 10) - 1);
+
+if (cluster.isMaster && cpu > 1) {
+    // Fork workers.
+    for (let i = 0; i < cpu; i++) {
+        cluster.fork();
+    }
+
+    cluster.on('exit', (worker) => {
+        console.warn(`worker ${ worker.process.pid } died`);
+    });
+
+    return;
+}
 
 http.createServer((req, res) => {
     let body = [];
@@ -46,4 +62,4 @@ http.createServer((req, res) => {
         res.setHeader('Content-Type', 'plain/text');
         res.end(content);
     }
-}).listen('8080', '0.0.0.0');
+}).listen('9897', '0.0.0.0');
